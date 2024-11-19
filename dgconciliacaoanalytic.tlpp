@@ -1,0 +1,277 @@
+#include "msobject.ch"
+#include "totvs.framework.treports.integratedprovider.th"
+  
+namespace custom.fina.conciliacaocrede.integratedprovider
+ 
+@totvsFrameworkTReportsIntegratedProvider(active=.T., team="SIGAFIN", tables="SE1, SAE, SL1, SL4", name="ConciliacaoRede", country="ALL", initialRelease="12.1.2210")
+class SE1RDAnalyticsTReportsBusinessObject from totvs.framework.treports.integratedprovider.IntegratedProvider
+    public method new() as object
+    public method getData() as object
+    public method getSchema() as object
+    data aFields as array
+    data aStruct as array
+endclass
+  
+method new() class SE1RDAnalyticsTReportsBusinessObject
+    _Super:new()
+    //Define a area
+    self:appendArea("Financeiro - Customizados")
+    
+    //Define o nome do Objeto de negocio
+    self:setDisplayName("DG - Conciliacao Cartao Financeiro - Analitico")
+    
+    //Define a descricao do Objeto de negocio
+    self:setDescription("Vis„o de dados Conciliacao Cart„o Financeiro  - Analitico")
+
+    self:aFields := {{"E1_FILIAL","COD_AUTORIZA","NSU_CV","NSU","E1_EMISSAO", "DT_Baixa", "E1_NUM"},;
+                    {"E1_PREFIXO","E1_BASCOM1", "E1_VALOR", "AE_DIAS", "AE_TAXA", "VLR_MDR", "VLR_LIQ_MDR"},;
+                    {"L4_ADMINIS", "BANDEIRA", "L4_DATATEF", "L4_HORATEF", "MODALIDADE", "E1_NSUTEF"}}
+
+    self:aStruct := {{"E1_FILIAL",          "C", 2,0},;
+                    {"COD_AUTORIZA",        "N", 20,0},;
+                    {"NSU_CV",              "N", 20,0},;
+                    {"NSU",                 "N", 20,0},;
+                    {"E1_EMISSAO",          "D", 8,0},;
+                    {"DT_Baixa",            "D", 8,0},;
+                    {"E1_NUM",              "C", 9,0},;
+                    {"E1_PREFIXO",          "N", 3,0},;
+                    {"E1_BASCOM1",          "N", 17,2},;
+                    {"E1_VALOR",            "N", 17,2},;
+                    {"AE_DIAS",             "N", 3,0},;
+                    {"AE_TAXA",             "N", 5,2},;
+                    {"VLR_MDR",             "N", 17,2},;
+                    {"VLR_LIQ_MDR",         "N", 17,2},;
+                    {"L4_ADMINIS",          "C", 20,0},;
+                    {"BANDEIRA",            "C", 10,0},;
+                    {"L4_DATATEF",          "D", 8,0},;
+                    {"L4_HORATEF",          "C", 6,0},;
+                    {"MODALIDADE",          "C", 3,0},;
+                    {"E1_NSUTEF",           "C", 3,0}}
+return self
+ 
+method getData(nPage as numeric, oFilter as object) as object class SE1RDAnalyticsTReportsBusinessObject
+    local cQuery as character
+    local cAlias as character
+    Local nSkip  as numeric
+    Local nCount := 0
+    local cFilIni   as character//colocar filial na query
+    local cFilEnd   as character//colocar filial na query
+    local cStartDate as character
+    local cEndDate   as character
+
+    Local oJItens    as Object
+
+    
+    setDefaultParams( oFilter:getParameters(),;//Pega o objeto Json para os parametros passados
+                      @cFilIni               ,;//Passa a variavel por referencia
+                      @cFilEnd               ,;//Passa a variavel por referencia
+                      @cStartDate            ,;//Passa a variavel por referencia
+                      @cEndDate               ) //Passa a variavel por referencia
+    //Define a quantidade m√°xima por p√°gina (Default 100)
+    self:setPageSize(200)
+    
+    //Define a query do Objeto de negocio
+    
+    cQuery := " SELECT E1_FILIAL, "
+    cQuery += " 	SUBSTR(E1_CARTAUT, 2, 7) AS COD_AUTORIZA, "
+    cQuery += " 	SUBSTR(E1_DOCTEF, 0, 20) AS  NSU_CV, "
+    cQuery += " 	SUBSTR(L4_DOCTEF, 0, 20)  AS NSU, "
+    cQuery += " 	E1_EMISSAO, "
+    cQuery += " 	COALESCE(E1_BAIXA, ' ') AS DT_Baixa,"
+    cQuery += " 	E1_NUM, "
+    cQuery += " 	E1_PREFIXO, "
+    cQuery += " 	E1_BASCOM1, "
+    cQuery += " 	E1_VALOR, "
+    cQuery += " 	AE_DIAS, "
+    cQuery += " 	AE_TAXA, "
+    cQuery += " 	ROUND((E1_BASCOM1 * (AE_TAXA / 100)), 2) AS VLR_MDR, "
+    cQuery += " 	E1_BASCOM1 - ROUND((E1_BASCOM1 * AE_TAXA) / 100, 2) AS VLR_LIQ_MDR, "
+    cQuery += " 	L4_ADMINIS,"
+    cQuery += " 	CASE "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%VISA%' THEN 'Visa' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%MASTERCARD%' THEN 'Mastercard' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%ELO%' THEN 'Elo' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%AMEX%' THEN 'Amex' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%MAESTRO%' THEN 'Maestro' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%HIPERCARD%' THEN 'Hipercard' "
+    cQuery += " 		ELSE ' ' "
+    cQuery += " 	END AS BANDEIRA, "
+    cQuery += " 	L4_DATATEF, "
+    cQuery += " 	L4_HORATEF, "
+    cQuery += " 	CASE "
+    cQuery += " 		WHEN E1_TIPO = 'CD' THEN 'DEBITO' "
+    cQuery += " 		WHEN E1_TIPO = 'CC' THEN 'CREDITO' "
+    cQuery += " 		ELSE 'NAO IDENTIFICADO' "
+    cQuery += " 	END AS MODALIDADE, "
+    cQuery += " 	E1_NSUTEF "
+    cQuery += " FROM ( "
+    cQuery += " 	SELECT E1_FILIAL, "
+    cQuery += " 		E1_CARTAUT, "
+    cQuery += " 		E1_NSUTEF, "
+    cQuery += " 		E1_EMISSAO, "
+    cQuery += " 		E1_NUM, "
+    cQuery += " 		E1_PREFIXO, "
+    cQuery += " 		E1_DOCTEF, "
+    cQuery += " 		E1_BASCOM1, "
+    cQuery += " 		E1_VALOR, "
+    cQuery += " 		E1_BAIXA, "
+    cQuery += " 		E1_SERIE, "
+    cQuery += " 		E1_TIPO, "
+    cQuery += " 		E1_CLIENTE "
+    cQuery += " 	FROM Protheus." + RetSQLName("SE1") + " 
+    cQuery += " 	WHERE D_E_L_E_T_ = ' ' "
+    cQuery += " 		AND E1_TIPO IN ('CC', 'CD') "
+    cQuery += " 		AND E1_CARTAUT <> ' ') E1 "
+    cQuery += " LEFT JOIN ( "
+    cQuery += " 	SELECT L1_FILIAL, "
+    cQuery += " 		L1_DOC, "
+    cQuery += " 		L1_SERIE, "
+    cQuery += " 		L1_AUTORIZ, "
+    cQuery += " 		L1_NUM, "
+    cQuery += " 		L1_DOCTEF "
+    cQuery += " 	FROM Protheus." + RetSQLName("SL1") + "  SL1 ) L1 ON "
+    cQuery += " 	L1_FILIAL = E1_FILIAL "
+    cQuery += " 	AND L1_DOC = E1_NUM "
+    cQuery += " 	AND L1_SERIE = E1_SERIE "
+    cQuery += " LEFT JOIN ( "
+    cQuery += " 	SELECT L4_FILIAL, "
+    cQuery += " 		L4_NUM, "
+    cQuery += " 		L4_AUTORIZ, "
+    cQuery += " 		L4_DOCTEF, "
+    cQuery += " 		L4_ADMINIS, "
+    cQuery += " 		L4_DATA, "
+    cQuery += " 		L4_HORATEF, "
+    cQuery += " 		L4_DATATEF "
+    cQuery += " 	FROM Protheus." + RetSQLName("SL4") + "  SL4 ) L4 ON "
+    cQuery += " 	L1_FILIAL = L4_FILIAL "
+    cQuery += " 	AND L1_NUM = L4_NUM "
+    cQuery += " 	AND E1_CARTAUT = L4_AUTORIZ "
+    cQuery += " 	AND E1_DOCTEF = L4_DOCTEF "
+    cQuery += " INNER JOIN ( "
+    cQuery += " 	SELECT "
+    cQuery += " 		AE_COD, "
+    cQuery += " 		AE_DIAS, "
+    cQuery += " 		AE_DESC, "
+    cQuery += " 		AE_TAXA "
+    cQuery += " 	FROM  Protheus." + RetSQLName("SAE") + " 
+    cQuery += " 	WHERE D_E_L_E_T_ = ' ' "
+    cQuery += " 		  AND AE_MSBLQL = ' ' ) A ON "
+    cQuery += " 	A.AE_COD = E1_CLIENTE "
+    cQuery += "WHERE " + iif(Empty(cFilIni),"","  E1_FILIAL BETWEEN '" + (cFilIni) +"' AND '" + (cFilEnd) +"'")
+    cQuery += iif(Empty(cStartDate),"","        AND E1_EMISSAO >= '" + (cStartDate) +"' ")
+    cQuery += iif(Empty(cEndDate)  ,"","        AND E1_EMISSAO <= '" + (cEndDate  ) +"' ")
+    cQuery += " ORDER BY L4_DATATEF, E1_FILIAL, "
+    cQuery += " 	CASE WHEN L4_ADMINIS LIKE '%VISA%' THEN 'Visa' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%MASTERCARD%' THEN 'Mastercard' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%ELO%' THEN 'Elo' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%AMEX%' THEN 'Amex' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%MAESTRO%' THEN 'Maestro' "
+    cQuery += " 		WHEN L4_ADMINIS LIKE '%HIPERCARD%' THEN 'Hipercard' "
+    cQuery += " 		ELSE ' ' END "
+
+
+    // Os filtros ser√£o setados na interface do novo TReports
+    if oFilter:hasFilter()//se existe filtro
+        cQuery += " AND " + oFilter:getSQLExpression() //Adiciona a string pura?
+    endif
+
+    
+    cAlias := MpSysOpenQuery(cQuery,GetNextAlias())//Pega proximo alias livre e cria a tabela
+    
+    if nPage > 2
+        //Encontra a quantidade de itens que ir√° pular de acordo com a p√°gina atual
+        nSkip := ((nPage - 1) * self:getPageSize())    
+        (cAlias)->(dbSkip(nSkip))
+    endif 
+
+    while !(cAlias)->(Eof())
+        oJItens :=JsonObject():new()
+
+        // Preenche o objeto JSON com os dados do registro atual
+        oJItens["E1_FILIAL"] 			:=(cAlias) -> E1_FILIAL
+        oJItens["COD_AUTORIZA"]			:=(cAlias) -> COD_AUTORIZA
+        oJItens["NSU_CV"]    			:=(cAlias) -> NSU_CV 
+        oJItens["NSU"]       			:=(cAlias) -> NSU    
+        oJItens["E1_EMISSAO"]			:=totvs.framework.treports.date.stringToTimeStamp((cAlias) -> E1_EMISSAO)
+        oJItens["DT_Baixa"]			    :=totvs.framework.treports.date.stringToTimeStamp((cAlias) -> DT_Baixa)
+        oJItens["E1_NUM"]    			:=(cAlias) -> E1_NUM 
+        oJItens["E1_PREFIXO"]			:=(cAlias) -> E1_PREFIXO
+        oJItens["E1_BASCOM1"]			:=(cAlias) -> E1_BASCOM1
+        oJItens["E1_VALOR"]			    :=(cAlias) -> E1_VALOR
+        oJItens["AE_DIAS"]   			:=(cAlias) -> AE_DIAS
+        oJItens["AE_TAXA"]   			:=(cAlias) -> AE_TAXA
+        oJItens["VLR_MDR"]   			:=(cAlias) -> VLR_MDR
+        oJItens["VLR_LIQ_MDR"]			:=(cAlias) -> VLR_LIQ_MDR
+        oJItens["L4_ADMINIS"]			:=(cAlias) -> L4_ADMINIS
+        oJItens["BANDEIRA"]			    :=(cAlias) -> BANDEIRA
+        oJItens["L4_DATATEF"]			:=totvs.framework.treports.date.stringToTimeStamp((cAlias) -> L4_DATATEF)
+        oJItens["L4_HORATEF"]			:=(cAlias) -> L4_HORATEF
+        oJItens["MODALIDADE"]			:=(cAlias) -> MODALIDADE
+        oJItens["E1_NSUTEF"] 			:=(cAlias) -> E1_NSUTEF
+
+        self:oData:appendData(oJItens)//assumo que oData:AppendData aceite Json
+
+        (cAlias)->(DBSkip())
+        nCount++
+        //Sai do loop quando chegar no tamanho de itens da p√°gina
+        if nCount == self:getPageSize()
+            exit
+        endif
+    enddo
+   
+    self:setHasNext(!(cAlias)->(Eof()))//Indica ainda tem proximos itens(mais paginas)
+   
+    (cAlias)->(DBCloseArea())//fecha consulta
+     
+return self:oData //retorna os dados
+  
+method getSchema() as object class SE1RDAnalyticsTReportsBusinessObject
+    
+    self:addProperty("E1_FILIAL", "Filial", "string", "Filial", "E1_FILIAL") 		
+    self:addProperty("COD_AUTORIZA", "Cod_Autoriza", "string", "Cod_Autoriza","COD_AUTORIZA")		
+    self:addProperty("NSU_CV", "NSU_CV", "string", "NSU_CV", "NSU_CV")   		
+    self:addProperty("NSU", "NSU", "string", "NSU", "NSU")       		
+    self:addProperty("E1_EMISSAO", "Emissao", "date", "Emissao", "E1_EMISSAO")		
+    self:addProperty("DT_Baixa", "DT_Baixa", "string", "DT_Baixa", "DT_Baixa")  		
+    self:addProperty("E1_NUM", "Titulo", "string", "Titulo", "E1_NUM")    		
+    self:addProperty("E1_PREFIXO", "Prefixo", "string", "Prefixo", "E1_PREFIXO")		
+    self:addProperty("E1_BASCOM1", "VLR_Venda", "number", "VLR_Venda", "E1_BASCOM1")		
+    self:addProperty("E1_VALOR", "VLR_Fin", "number", "VLR_Fin", "E1_VALOR")		
+    self:addProperty("AE_DIAS", "Prazo", "string", "Prazo","AE_DIAS")	
+    self:addProperty("AE_TAXA", "Taxa", "number", "Taxa", "AE_TAXA")  		
+    self:addProperty("VLR_MDR", "VLR_MDR", "number", "VLR_MDR", "VLR_MDR")  		
+    self:addProperty("VLR_LIQ_MDR", "VLR_LIQ_MDR", "number", "VLR_LIQ_MDR", "VLR_LIQ_MDR")		
+    self:addProperty("L4_ADMINIS", "Adm_Financeira", "string", "Adm_Financeira", "L4_ADMINIS")		
+    self:addProperty("BANDEIRA", "Bandeira", "string", "Bandeira", "BANDEIRA")		
+    self:addProperty("L4_DATATEF", "Data_TEF", "date", "Data_TEF", "L4_DATATEF")		
+    self:addProperty("L4_HORATEF", "Hora_TEF", "string", "Hora_TEF"	, "L4_HORATEF")
+    self:addProperty("MODALIDADE", "Modalidade", "string", "Modalidade", "MODALIDADE")	
+    self:addProperty("E1_NSUTEF", "NSU_Fin", "string", "NSU_Fin", "E1_NSUTEF")		
+
+    self:addParameter("01", "Filial de", "string", .F.)
+    self:addParameter("02", "Filial atÈ", "string", .F.)
+    self:addParameter("03", "Data de emiss„o de", "date", .F.)
+    self:addParameter("04", "Data de emiss„o atÈ", "date", .F.)
+
+    self:setCustomURL("01", "api/framework/v1/genericLookupService/smartview/SM0", 2)
+    self:setCustomURL("02", "api/framework/v1/genericLookupService/smartview/SM0", 2)
+return self:oSchema
+
+Static function setDefaultParams(oJParam,cFilIni,cFilEnd,cDtIni,cDtEnd)
+    // Default oJParam:=Nil Nao faria nada, mas para esclarecer caso venha nulo(Nao sabemos como a totvs traz quando vem vazio, assumo o pior caso)
+    Default cFilIni :=" "
+    Default cFilEnd :=" "
+    Default cDtIni  :=" "
+    Default cDtEnd  :=" "
+    
+    
+    if Valtype(oJParam) == 'U' 
+        Return .F. //Retorna sem alterar os valores padroes
+    endif
+
+    cFilIni:= iif(Valtype(oJParam["01"]) == 'A' .and. len(oJParam["01"])>0 , alltrim(oJParam["01"][1])                    , cFilIni   )//Se for array e tiver 1 elemento pega do Json(Lembrar de conversoes de tipo para sair como Characater/String )
+    cFilEnd:= iif(Valtype(oJParam["02"]) == 'A' .and. len(oJParam["02"])>0 , alltrim(oJParam["02"][1])                    , cFilEnd   )//Se for array e tiver 1 elemento pega do Json(Lembrar de conversoes de tipo para sair como Characater/String )
+    cDtIni := iif(Valtype(oJParam["03"]) == 'A' .and. len(oJParam["03"])>0 , StrTran(SubStr(oJParam["03"][1],1,10),'-',''), cDtIni    )//Se for array e tiver 1 elemento pega do Json(Lembrar de conversoes de tipo para sair como Characater/String )
+    cDtEnd := iif(Valtype(oJParam["04"]) == 'A' .and. len(oJParam["04"])>0 , StrTran(SubStr(oJParam["04"][1],1,10),'-',''), cDtEnd    )//Se for array e tiver 1 elemento pega do Json(Lembrar de conversoes de tipo para sair como Characater/String )
+
+return .T.//retornos logicos nao necessarios s√≥ para organiza√ß√£o minha
